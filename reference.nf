@@ -71,7 +71,7 @@ process gz_faidx {
     input:
         path(ref)
     output:
-        tuple path(ref), path("${ref}.fai"), path("${ref}.gzi")
+        tuple path("${ref}.fai"), path("${ref}.gzi")
     script:
     """
     samtools faidx ${ref}
@@ -143,7 +143,8 @@ workflow prepare_reference {
                     Channel.fromPath(input_gzi_index)
                 )
             } else {
-                gzindexes = gz_faidx(Channel.fromPath(margs.input_ref))
+                gzindexes = Channel.fromPath(margs.input_ref)
+                | combine(gz_faidx(Channel.fromPath(margs.input_ref)))
                 gzindexes.ifEmpty{
                     if (params.containsKey("igv") && params.igv){
                         log.warn """\
