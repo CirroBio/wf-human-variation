@@ -445,8 +445,9 @@ def xam_ingress(Map arguments)
     // Validate non-null files with index
     ch_validated = ch_to_validate.to_validate
     | validateIndex
+    | join(ch_to_validate.to_validate)
     | branch {
-        meta, bam, bai, has_valid_index_env -> 
+        meta, has_valid_index_env, bam, bai ->
         boolean has_valid_index = has_valid_index_env as int as boolean
         // Split if it is a valid index
         valid_idx: has_valid_index
@@ -460,11 +461,14 @@ def xam_ingress(Map arguments)
     | mix(ch_to_validate.no_op_needed)
 
     // Re-index sorted-not-indexed BAM file
-    ch_indexed = ch_result.to_index
+    ch_to_index = ch_result.to_index
     | mix( ch_validated.invalid_idx )
+
+    ch_indexed = ch_to_index
     | samtools_index
+    | join(ch_to_index)
     | map{
-        meta, bam, bai ->
+        meta, bai, bam ->
         [meta + [src_xai: null], bam, bai]
     }
 
@@ -496,6 +500,8 @@ def xam_ingress(Map arguments)
             is_null: true
         }
         ch_bamstats = bamstats(ch_result.has_reads, margs)
+        | join(ch_result.has_reads)
+        | map{ meta, stats, bam, bai -> [meta, bam, bai, stats] }
 
         // the channel comes from xam_ingress also have the BAM index in it.
         // Handle this by placing them in a nested array, maintaining the structure 
@@ -656,14 +662,9 @@ process validateIndex {
     memory "2 GB"
     input: tuple val(meta), path("reads.bam"), path("reads.bam.bai")
     output:
-        // set the two env variables by `eval`-ing the output of the python script
-        // checking the XAM headers
-        tuple(
-            val(meta),
-            path("reads.bam", includeInputs: true),
-            path("reads.bam.bai", includeInputs: true),
-            env(HAS_VALID_INDEX)
-        )
+        // set the env variable by `eval`-ing the output of the python script
+        // checking the XAM index
+        tuple val(meta), env(HAS_VALID_INDEX)
     script:
     """
     workflow-glue check_xam_index reads.bam > env.vars
@@ -732,10 +733,7 @@ process bamstats {
         tuple val(meta), path("reads.bam"), path("reads.bam.bai")
         val bsargs
     output:
-        tuple val(meta),
-              path("reads.bam"),
-              path("reads.bam.bai"),
-              path("bamstats_results")
+        tuple val(meta), path("bamstats_results")
     script:
         def bamstats_threads = Math.max(1, task.cpus - 1)
         def per_read_stats_arg = bsargs["per_read_stats"] ? "| bgzip > bamstats_results/bamstats.readstats.tsv.gz" : " > /dev/null"
@@ -1312,11 +1310,11 @@ process samtools_index {
     label "wf_common"
     memory 4.GB
     input:
-        tuple val(meta), path("reads.bam")
+        tuple val(meta), path(xam)
     output:
-        tuple val(meta), path("reads.bam"), path("reads.bam.bai")
+        tuple val(meta), path("${xam}.bai")
     script:
     """
-    samtools index -@ $task.cpus reads.bam
+    samtools index -@ $task.cpus ${xam}
     """
 }
