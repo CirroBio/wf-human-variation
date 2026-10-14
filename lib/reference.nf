@@ -138,10 +138,8 @@ workflow prepare_reference {
             // Otherwise, generate the gzip + fai indexes for the compressed reference.
             if (file(input_fai_index).exists() && file(input_gzi_index).exists()){
                 gzindexes = Channel.fromPath(margs.input_ref)
-                | mix(
-                    Channel.fromPath(input_fai_index),
-                    Channel.fromPath(input_gzi_index)
-                )
+                | combine(Channel.fromPath(input_fai_index))
+                | combine(Channel.fromPath(input_gzi_index))
             } else {
                 gzindexes = Channel.fromPath(margs.input_ref)
                 | combine(gz_faidx(Channel.fromPath(margs.input_ref)))
