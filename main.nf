@@ -844,16 +844,19 @@ workflow {
         validate_modbam(pass_bam_channel, ref_channel)
 
         // Warn of input without modified base tags
-        validate_modbam.out.branch{
-            stdbam: it[-1] == '65'
-            modbam: it[-1] == '0'
+        validate_modbam.out
+            .join(pass_bam_channel.map{ cram, crai, meta -> [meta, cram, crai] })
+            .branch{ meta, valid, cram, crai ->
+                stdbam: valid == '65'
+                    return [cram, crai, meta]
+                modbam: valid == '0'
+                    return [cram, crai, meta]
             }.set{validated_modbam}
         // Log warn if it is not modbam
         validated_modbam.stdbam.subscribe{
             it -> log.warn "Input ${it[0]} does not contain modified base tags. Was a modified basecalling model selected when basecalling this data?"
         }
         modbam_ch = validated_modbam.modbam
-                .map{cram, crai, meta, code -> [cram, crai, meta]}
 
         // Compute the probabilities on the valid modbam
         modkit_probs = sample_probs(modbam_ch, ref_channel)
