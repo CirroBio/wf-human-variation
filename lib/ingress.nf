@@ -304,8 +304,7 @@ def xam_ingress(Map arguments)
 
     def input = get_valid_inputs(margs, xam_extensions)
 
-    // check BAM headers to see if any samples are uBAM
-    ch_result = input.dirs
+    ch_xams = input.dirs
     | map { meta, path -> [meta, get_target_files_in_dir(path, xam_extensions, margs)] }
     | mix(input.files)
     | map{
@@ -329,8 +328,12 @@ def xam_ingress(Map arguments)
         }
         [meta + [src_xam: src_xam, src_xai: src_xai], paths]
     }
+
+    // check BAM headers to see if any samples are uBAM
+    ch_result = ch_xams
     | checkBamHeaders
-    | map { meta, paths, is_unaligned_env, mixed_headers_env, is_sorted_env ->
+    | join(ch_xams)
+    | map { meta, is_unaligned_env, mixed_headers_env, is_sorted_env, paths ->
         // convert the env. variables from strings ('0' or '1') into bools
         boolean is_unaligned = is_unaligned_env as int as boolean
         boolean mixed_headers = mixed_headers_env as int as boolean
@@ -660,13 +663,7 @@ process checkBamHeaders {
     memory "2 GB"
     input: tuple val(meta), path("input_dir/reads*.bam")
     output:
-        tuple(
-            val(meta),
-            path("input_dir/reads*.bam", includeInputs: true),
-            env(IS_UNALIGNED),
-            env(MIXED_HEADERS),
-            env(IS_SORTED),
-        )
+        tuple val(meta), env(IS_UNALIGNED), env(MIXED_HEADERS), env(IS_SORTED)
     script:
     """
     workflow-glue check_bam_headers_in_dir input_dir > env.vars
