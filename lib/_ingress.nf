@@ -69,7 +69,7 @@ process check_for_alignment {
         tuple path(reference), path(ref_idx)
         tuple val(meta), path(xam), path(xam_idx)
     output:
-        tuple env(to_align), env(has_maps), val(meta), path(xam), path(xam_idx)
+        tuple val(meta), env(to_align), env(has_maps)
     script:
         """
         to_align=0
@@ -129,11 +129,10 @@ workflow ingress {
         // Index the input BAM, and then check if the header matches the reference.
         // Add also if it is a CRAM (for downstream compatibility) and move if they need realignment
         // to meta.
-        checked_bam = check_for_alignment(
-                check_ref,
-                ingressed_bam.map{ it - null }
-            ) |
-            map{ to_align, has_maps, meta, xam, xai ->
+        ch_to_check = ingressed_bam.map{ it - null }
+        checked_bam = check_for_alignment(check_ref, ch_to_check)
+            | join(ch_to_check)
+            | map{ meta, to_align, has_maps, xam, xai ->
                 [meta + [to_align: to_align != '0', has_mapped_reads: has_maps == '1'], xam, xai]
             }
 
