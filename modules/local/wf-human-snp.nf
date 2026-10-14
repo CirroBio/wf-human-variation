@@ -189,11 +189,9 @@ process select_het_snps {
 }
 
 process phase_contig {
-    // Tags reads in an input BAM from heterozygous SNPs
-    // The haplotag step was removed in clair-v0.1.11 so this step re-emits
-    //   the original BAM and BAI as phased_bam for compatability,
-    //   but adds the VCF as it is now tagged with phasing information
-    //   used later in the full-alignment model
+    // Phases heterozygous SNPs; the phased VCF is used later in the
+    //   full-alignment model. Reads are not haplotagged (removed in
+    //   clair-v0.1.11), so the input BAM is used as-is downstream.
     label "longphase"
     cpus 4
     memory { longphase_memory[task.attempt - 1] }
@@ -203,7 +201,7 @@ process phase_contig {
     input:
         tuple val(contig), path(het_snps), path(het_snps_tbi), path(xam), path(xam_idx), val(xam_meta), path(ref), path(ref_idx), path(ref_cache), env(REF_PATH)
     output:
-        tuple val(contig), path(xam), path(xam_idx), val(xam_meta), path("phased_${contig}.vcf.gz"), emit: phased_bam_and_vcf
+        tuple val(contig), path("phased_${contig}.vcf.gz"), emit: phased_vcf
     script:
         // Intermediate phasing is performed with longphase.
         """
@@ -479,11 +477,6 @@ process post_clair_phase_contig {
         tuple val(xam_meta), val(contig),
             path("phased_${contig}.vcf.gz"), path("phased_${contig}.vcf.gz.tbi"),
             emit: vcf
-        tuple val(contig),
-            path("phased_${contig}.vcf.gz"), path("phased_${contig}.vcf.gz.tbi"),
-            path(xam), path(xam_idx), val(xam_meta),
-            path(ref), path(ref_idx), path(ref_cache), env(REF_PATH),
-            emit: for_tagging
     script:
     """
         # REF_PATH points to the reference cache and allows faster parsing of CRAM files

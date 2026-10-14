@@ -85,7 +85,9 @@ workflow snp {
         // > Step 3
         // > Step 4 (haplotagging is now done at the end of the workflow, rather than here)
         phase_contig(phase_inputs)
-        phase_contig.out.phased_bam_and_vcf.set { phased_bam_and_vcf }
+        phased_bam_and_vcf = phase_contig.out.phased_vcf
+            .combine(bam_channel)
+            .map{ contig, vcf, xam, xai, meta -> [contig, xam, xai, meta, vcf] }
 
         // Find quality filter to select variants for "full alignment"
         // processing, then generate bed files containing the candidates.
@@ -171,7 +173,14 @@ workflow snp {
                 .combine(reorg_bam_channel, by: 0)
                 .combine(ref) |
                 post_clair_phase_contig
-            post_clair_phase.for_tagging | post_clair_contig_haplotag
+            post_clair_phase.vcf
+                .combine(reorg_bam_channel, by: 0)
+                .combine(ref)
+                .map{
+                    meta, contig, vcf, tbi, xam, xai, fasta, fai, cache, ref_path ->
+                    [contig, vcf, tbi, xam, xai, meta, fasta, fai, cache, ref_path]
+                }
+                | post_clair_contig_haplotag
             // Get final vcfs which are haplotagphased
             // adding phase information to indels based on haplotagged reads
             final_vcfs = post_clair_contig_haplotag.out.haplotagphased_vcf.map{ meta, vcf, tbi -> [meta, vcf]}
