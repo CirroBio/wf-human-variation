@@ -1009,11 +1009,13 @@ workflow {
         | map { xam, xai, meta -> [xam, xai] }
         // Emit fasta or fai if they were changed from the input
         // (i.e. decompressed for fasta, generated for the fai)
-        // if they are required for use with IGV
+        // if they are required for use with IGV, which only reads them
+        // when the input reference has no bgzip index
         | mix(
             ref_channel
+            | combine(ref_gzindex | ifEmpty([null, null, null]))
             | map {
-                fasta, fai, cache, path_env -> [fasta, fai]
+                fasta, fai, cache, path_env, gzref, gzfai, gzi -> gzref ? [] : [fasta, fai]
             }
             | flatten
             | filter{
