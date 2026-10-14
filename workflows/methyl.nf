@@ -156,10 +156,7 @@ process validate_modbam {
             path(reference_cache),
             env(REF_PATH)
     output:
-        tuple path(alignment), 
-            path(alignment_index), 
-            val(meta),
-            env(valid)
+        tuple val(meta), env(valid)
 
     script:
     """
